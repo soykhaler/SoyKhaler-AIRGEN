@@ -2,15 +2,15 @@
 
 <JUCERPROJECT id="j6VCQu" name="SoyKhaler-AIRGEN" projectType="audioplug" version="1.1.1"
               bundleIdentifier="com.SoyKhalerSoyKhaler-AIRGEN" includeBinaryInAppConfig="1"
-              buildVST="0" buildVST3="1" buildAU="1" buildAUv3="0" buildRTAS="0"
-              buildAAX="0" pluginName="SoyKhaler-AIRGEN" pluginDesc="A mixing tool for adding airy, crispy presence"
+              buildVST="0" buildVST3="0" buildAU="1" buildAUv3="0" buildRTAS="0"
+              buildAAX="0" buildLV2="1" pluginName="SoyKhaler-AIRGEN" pluginDesc="A mixing tool for adding airy, crispy presence"
               pluginManufacturer="SoyKhaler" pluginManufacturerCode="SoyK"
               pluginCode="J6vc" pluginChannelConfigs="{1, 1},{2, 2}" pluginIsSynth="0"
               pluginWantsMidiIn="0" pluginProducesMidiOut="0" pluginIsMidiEffectPlugin="0"
               pluginEditorRequiresKeys="0" pluginAUExportPrefix="AIRAU" pluginRTASCategory=""
               aaxIdentifier="com.SoyKhaler.SoyKhaler-AIRGEN" pluginAAXCategory="2"
               companyName="SoyKhaler" companyWebsite="soykhaler.itch.io" companyEmail="aaronstone2000@gmail.com"
-              pluginFormats="buildAU,buildVST3" displaySplashScreen="1" jucerFormatVersion="1"
+              pluginFormats="buildAU,buildLV2" displaySplashScreen="1" jucerFormatVersion="1"
               buildStandalone="0" enableIAA="0" pluginVST3Category="Dynamics">
   <MAINGROUP id="ytp4Pr" name="SoyKhaler-AIRGEN">
     <GROUP id="{DD99666F-FF14-937D-5EED-EA9809A3E477}" name="Resources">
@@ -69,83 +69,28 @@
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
-    <VS2022 targetFolder="Builds/VisualStudio2022" toolset="v140" vst3Folder=""
-            IPPLibrary="">
-      <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" winWarningLevel="4" generateManifest="1" winArchitecture="x64"
-                       isDebug="1" optimisation="3" targetName="Roth-AIR" headerPath="DSPFilters/include/Users/dkdabaro/Documents/GitHub/Roth-AIR/DSPFilters"
-                       libraryPath="" useRuntimeLibDLL="0"/>
-        <CONFIGURATION name="Release" winWarningLevel="4" generateManifest="1" winArchitecture="x64"
-                       isDebug="0" optimisation="3" targetName="Roth-AIR" useRuntimeLibDLL="0"
-                       headerPath="/Users/dkdabaro/Documents/GitHub/Roth-AIR/DSPFilters"/>
-        <CONFIGURATION name="Release 32bit" winWarningLevel="4" generateManifest="1"
-                       winArchitecture="32-bit" isDebug="0" optimisation="3" targetName="Roth-AIR"
-                       headerPath="DSPFilters/include/Users/dkdabaro/Documents/GitHub/Roth-AIR/DSPFilters"
-                       useRuntimeLibDLL="0"/>
-      </CONFIGURATIONS>
-      <MODULEPATHS>
-        <MODULEPATH id="juce_core" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_events" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_graphics" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_data_structures" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_gui_basics" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_gui_extra" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_cryptography" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_video" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_opengl" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_basics" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_devices" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_formats" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_processors" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_plugin_client" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-      </MODULEPATHS>
-    </VS2022>
-    <XCODE_MAC targetFolder="Builds/MacOSX">
-      <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="Roth-AIR"
-                       headerPath="/Users/dkdabaro/Documents/GitHub/Roth-AIR/DSPFilters/include"/>
-        <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="Roth-AIR"
-                       linkTimeOptimisation="1" osxArchitecture="64BitUniversal" headerPath="/Users/dkdabaro/Documents/GitHub/Roth-AIR/DSPFilters"/>
-      </CONFIGURATIONS>
-      <MODULEPATHS>
-        <MODULEPATH id="juce_video" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_opengl" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_gui_extra" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_gui_basics" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_graphics" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_events" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_data_structures" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_cryptography" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_core" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_processors" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_plugin_client" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_formats" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_devices" path="../../../../../../../Applications/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_basics" path="../../../../../../../Applications/JUCE/modules"/>
-      </MODULEPATHS>
-    </XCODE_MAC>
-    <VS2019 targetFolder="Builds/VisualStudio2019">
+    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" vst3Folder="">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug"/>
-        <CONFIGURATION isDebug="0" name="Release" libraryPath="C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters&#10;&#10;C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\include\DspFilters"/>
+        <CONFIGURATION isDebug="0" name="Release"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
-        <MODULEPATH id="juce_audio_basics" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_devices" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_formats" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_plugin_client" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_audio_processors" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_core" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_cryptography" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_data_structures" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_events" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_graphics" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_gui_basics" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_gui_extra" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_opengl" path="../../../../Applications/JUCE_new/JUCE/modules"/>
-        <MODULEPATH id="juce_video" path="../../../../Applications/JUCE_new/JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_cryptography" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_video" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_opengl" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_basics" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_plugin_client" path="../../JUCE/modules"/>
       </MODULEPATHS>
-    </VS2019>
+    </LINUX_MAKE>
   </EXPORTFORMATS>
   <MODULES>
     <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="1"/>
@@ -164,8 +109,5 @@
     <MODULE id="juce_video" showAllCode="1" useLocalCopy="1"/>
   </MODULES>
   <JUCEOPTIONS JUCE_QUICKTIME="disabled"/>
-  <LIVE_SETTINGS>
-    <WINDOWS headerPath="D:\PROJECTS\Audio Dev\AIR\AIR_Code\DSPFilters\include"/>
-    <OSX headerPath="/Users/danielrothmann/Documents/SSD PROJECTS/Audio Dev/AIR/AIR_Code/DSPFilters/include"/>
-  </LIVE_SETTINGS>
+  
 </JUCERPROJECT>

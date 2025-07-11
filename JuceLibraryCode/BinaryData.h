@@ -9,7 +9,7 @@
 namespace BinaryData
 {
     extern const char*   airText_png;
-    const int            airText_pngSize = 22392;
+    const int            airText_pngSize = 1471;
 
     extern const char*   bigKnob_light_png;
     const int            bigKnob_light_pngSize = 60475;
@@ -39,10 +39,10 @@ namespace BinaryData
     const int            smallKnob_pngSize = 31445;
 
     extern const char*   title_png;
-    const int            title_pngSize = 24948;
+    const int            title_pngSize = 3351;
 
     extern const char*   website_png;
-    const int            website_pngSize = 23975;
+    const int            website_pngSize = 3291;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
     const int namedResourceListSize = 12;

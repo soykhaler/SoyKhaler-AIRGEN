@@ -36,9 +36,9 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_POLEFILTER_H
 #define DSPFILTERS_POLEFILTER_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\MathSupplement.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Cascade.h"
+#include "Common.h"
+#include "MathSupplement.h"
+#include "Cascade.h"
 
 namespace Dsp {
 

@@ -36,11 +36,11 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_BUTTERWORTH_H
 #define DSPFILTERS_BUTTERWORTH_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Cascade.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Design.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Filter.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\PoleFilter.h"
+#include "Common.h"
+#include "Cascade.h"
+#include "Design.h"
+#include "Filter.h"
+#include "PoleFilter.h"
 
 namespace Dsp {
 

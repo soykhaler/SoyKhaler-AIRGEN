@@ -36,11 +36,11 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_FILTER_H
 #define DSPFILTERS_FILTER_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\MathSupplement.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Params.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\State.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Types.h"
+#include "Common.h"
+#include "MathSupplement.h"
+#include "Params.h"
+#include "State.h"
+#include "Types.h"
 
 namespace Dsp {
 

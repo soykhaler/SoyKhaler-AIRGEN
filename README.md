@@ -1,3 +1,8 @@
+# SoyKhaler AIRGEN
+## (Fork of the original Roth-AIR by Daniel Rothmann)
+A modern and improved fork with downloadable releases available in VST3 and LV2 formats.
+
+
 # Roth-AIR
 Roth-AIR is a mixing tool for easily adding airy, crispy presence to your audio.
 

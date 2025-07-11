@@ -1,21 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   The code included in this file is provided under the terms of the ISC license
-   http://www.isc.org/downloads/software-support-policy/isc-license. Permission
-   To use, copy, modify, and/or distribute this software for any purpose with or
-   without fee is hereby granted provided that the above copyright notice and
-   this permission notice appear in all copies.
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
+
+   Or:
+
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -23,8 +35,8 @@
 namespace juce
 {
 
-struct FallbackDownloadTask  : public URL::DownloadTask,
-                               public Thread
+struct FallbackDownloadTask final : public URL::DownloadTask,
+                                    public Thread
 {
     FallbackDownloadTask (std::unique_ptr<FileOutputStream> outputStreamToUse,
                           size_t bufferSizeToUse,
@@ -106,29 +118,26 @@ struct FallbackDownloadTask  : public URL::DownloadTask,
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FallbackDownloadTask)
 };
 
-void URL::DownloadTask::Listener::progress (DownloadTask*, int64, int64) {}
-URL::DownloadTask::Listener::~Listener() {}
+void URL::DownloadTaskListener::progress (DownloadTask*, int64, int64) {}
 
 //==============================================================================
 std::unique_ptr<URL::DownloadTask> URL::DownloadTask::createFallbackDownloader (const URL& urlToUse,
                                                                                 const File& targetFileToUse,
-                                                                                const String& extraHeadersToUse,
-                                                                                Listener* listenerToUse,
-                                                                                bool usePostRequest)
+                                                                                const DownloadTaskOptions& options)
 {
     const size_t bufferSize = 0x8000;
     targetFileToUse.deleteFile();
 
     if (auto outputStream = targetFileToUse.createOutputStream (bufferSize))
     {
-        auto stream = std::make_unique<WebInputStream> (urlToUse, usePostRequest);
-        stream->withExtraHeaders (extraHeadersToUse);
+        auto stream = std::make_unique<WebInputStream> (urlToUse, options.usePost);
+        stream->withExtraHeaders (options.extraHeaders);
 
         if (stream->connect (nullptr))
             return std::make_unique<FallbackDownloadTask> (std::move (outputStream),
                                                            bufferSize,
                                                            std::move (stream),
-                                                           listenerToUse);
+                                                           options.listener);
     }
 
     return nullptr;
@@ -181,7 +190,15 @@ URL::URL (File localFile)
 
 void URL::init()
 {
-    auto i = url.indexOfChar ('?');
+    auto i = url.indexOfChar ('#');
+
+    if (i >= 0)
+    {
+        anchor = removeEscapeChars (url.substring (i + 1));
+        url = url.upToFirstOccurrenceOf ("#", false, false);
+    }
+
+    i = url.indexOfChar ('?');
 
     if (i >= 0)
     {
@@ -349,8 +366,21 @@ String URL::getSubPath (bool includeGetParameters) const
 
 String URL::getQueryString() const
 {
+    String result;
+
     if (parameterNames.size() > 0)
-        return "?" + URLHelpers::getMangledParameters (*this);
+        result += "?" + URLHelpers::getMangledParameters (*this);
+
+    if (anchor.isNotEmpty())
+        result += getAnchorString();
+
+    return result;
+}
+
+String URL::getAnchorString() const
+{
+    if (anchor.isNotEmpty())
+        return "#" + URL::addEscapeChars (anchor, true);
 
     return {};
 }
@@ -376,6 +406,11 @@ String URL::getFileName() const
     return toString (false).fromLastOccurrenceOf ("/", false, true);
 }
 #endif
+
+URL::ParameterHandling URL::toHandling (bool usePostData)
+{
+    return usePostData ? ParameterHandling::inPostData : ParameterHandling::inAddress;
+}
 
 File URL::fileFromFileSchemeURL (const URL& fileURL)
 {
@@ -413,6 +448,18 @@ int URL::getPort() const
     return colonPos > 0 ? url.substring (colonPos + 1).getIntValue() : 0;
 }
 
+String URL::getOrigin() const
+{
+    const auto schemeAndDomain = getScheme() + "://" + getDomain();
+
+    const auto colonPos = url.indexOfChar (URLHelpers::findStartOfNetLocation (url), ':');
+
+    if (colonPos > 0)
+        return schemeAndDomain + ":" + String { getPort() };
+
+    return schemeAndDomain;
+}
+
 URL URL::withNewDomainAndPath (const String& newURL) const
 {
     URL u (*this);
@@ -447,14 +494,21 @@ URL URL::getChildURL (const String& subPath) const
     return u;
 }
 
-void URL::createHeadersAndPostData (String& headers, MemoryBlock& postDataToWrite) const
+bool URL::hasBodyDataToSend() const
+{
+    return filesToUpload.size() > 0 || ! postData.isEmpty();
+}
+
+void URL::createHeadersAndPostData (String& headers,
+                                    MemoryBlock& postDataToWrite,
+                                    bool addParametersToBody) const
 {
     MemoryOutputStream data (postDataToWrite, false);
 
     if (filesToUpload.size() > 0)
     {
         // (this doesn't currently support mixing custom post-data with uploads..)
-        jassert (postData.getSize() == 0);
+        jassert (postData.isEmpty());
 
         auto boundary = String::toHexString (Random::getSystemRandom().nextInt64());
 
@@ -491,8 +545,10 @@ void URL::createHeadersAndPostData (String& headers, MemoryBlock& postDataToWrit
     }
     else
     {
-        data << URLHelpers::getMangledParameters (*this)
-             << postData;
+        if (addParametersToBody)
+            data << URLHelpers::getMangledParameters (*this);
+
+        data << postData;
 
         // if the user-supplied headers didn't contain a content-type, add one now..
         if (! headers.containsIgnoreCase ("Content-Type"))
@@ -566,7 +622,7 @@ template <typename Stream> struct iOSFileStreamWrapperFlush    { static void flu
 template <> struct iOSFileStreamWrapperFlush<FileOutputStream> { static void flush (OutputStream* o) { o->flush(); } };
 
 template <typename Stream>
-class iOSFileStreamWrapper : public Stream
+class iOSFileStreamWrapper final : public Stream
 {
 public:
     iOSFileStreamWrapper (URL& urlToUse)
@@ -598,8 +654,7 @@ public:
             }
             else
             {
-                auto desc = [error localizedDescription];
-                ignoreUnused (desc);
+                [[maybe_unused]] auto desc = [error localizedDescription];
                 jassertfalse;
             }
         }
@@ -632,8 +687,7 @@ private:
                 return urlToUse.getLocalFile();
             }
 
-            auto desc = [error localizedDescription];
-            ignoreUnused (desc);
+            [[maybe_unused]] auto desc = [error localizedDescription];
             jassertfalse;
         }
 
@@ -656,81 +710,136 @@ private:
     }
 };
 #endif
+//==============================================================================
+template <typename Member, typename Item>
+static URL::InputStreamOptions with (URL::InputStreamOptions options, Member&& member, Item&& item)
+{
+    options.*member = std::forward<Item> (item);
+    return options;
+}
+
+URL::InputStreamOptions::InputStreamOptions (ParameterHandling handling)  : parameterHandling (handling)  {}
+
+URL::InputStreamOptions URL::InputStreamOptions::withProgressCallback (std::function<bool (int, int)> cb) const
+{
+    return with (*this, &InputStreamOptions::progressCallback, std::move (cb));
+}
+
+URL::InputStreamOptions URL::InputStreamOptions::withExtraHeaders (const String& headers) const
+{
+    return with (*this, &InputStreamOptions::extraHeaders, headers);
+}
+
+URL::InputStreamOptions URL::InputStreamOptions::withConnectionTimeoutMs (int timeout) const
+{
+    return with (*this, &InputStreamOptions::connectionTimeOutMs, timeout);
+}
+
+URL::InputStreamOptions URL::InputStreamOptions::withResponseHeaders (StringPairArray* headers) const
+{
+    return with (*this, &InputStreamOptions::responseHeaders, headers);
+}
+
+URL::InputStreamOptions URL::InputStreamOptions::withStatusCode (int* status) const
+{
+    return with (*this, &InputStreamOptions::statusCode, status);
+}
+
+URL::InputStreamOptions URL::InputStreamOptions::withNumRedirectsToFollow (int numRedirects) const
+{
+    return with (*this, &InputStreamOptions::numRedirectsToFollow, numRedirects);
+}
+
+URL::InputStreamOptions URL::InputStreamOptions::withHttpRequestCmd (const String& cmd) const
+{
+    return with (*this, &InputStreamOptions::httpRequestCmd, cmd);
+}
 
 //==============================================================================
-std::unique_ptr<InputStream> URL::createInputStream (bool usePostCommand,
-                                                     OpenStreamProgressCallback* progressCallback,
-                                                     void* progressCallbackContext,
-                                                     String headers,
-                                                     int timeOutMs,
-                                                     StringPairArray* responseHeaders,
-                                                     int* statusCode,
-                                                     int numRedirectsToFollow,
-                                                     String httpRequestCmd) const
+std::unique_ptr<InputStream> URL::createInputStream (const InputStreamOptions& options) const
 {
     if (isLocalFile())
     {
        #if JUCE_IOS
         // We may need to refresh the embedded bookmark.
-        return std::make_unique<iOSFileStreamWrapper<FileInputStream>> (const_cast<URL&>(*this));
+        return std::make_unique<iOSFileStreamWrapper<FileInputStream>> (const_cast<URL&> (*this));
        #else
         return getLocalFile().createInputStream();
        #endif
     }
 
-    auto wi = std::make_unique<WebInputStream> (*this, usePostCommand);
-
-    struct ProgressCallbackCaller  : public WebInputStream::Listener
+    auto webInputStream = [&]
     {
-        ProgressCallbackCaller (OpenStreamProgressCallback* progressCallbackToUse, void* progressCallbackContextToUse)
-            : callback (progressCallbackToUse), data (progressCallbackContextToUse)
-        {}
+        const auto usePost = options.getParameterHandling() == ParameterHandling::inPostData;
+        auto stream = std::make_unique<WebInputStream> (*this, usePost);
+
+        auto extraHeaders = options.getExtraHeaders();
+
+        if (extraHeaders.isNotEmpty())
+            stream->withExtraHeaders (extraHeaders);
+
+        auto timeout = options.getConnectionTimeoutMs();
+
+        if (timeout != 0)
+            stream->withConnectionTimeout (timeout);
+
+        auto requestCmd = options.getHttpRequestCmd();
+
+        if (requestCmd.isNotEmpty())
+            stream->withCustomRequestCommand (requestCmd);
+
+        stream->withNumRedirectsToFollow (options.getNumRedirectsToFollow());
+
+        return stream;
+    }();
+
+    struct ProgressCallbackCaller final : public WebInputStream::Listener
+    {
+        ProgressCallbackCaller (std::function<bool (int, int)> progressCallbackToUse)
+            : callback (std::move (progressCallbackToUse))
+        {
+        }
 
         bool postDataSendProgress (WebInputStream&, int bytesSent, int totalBytes) override
         {
-            return callback (data, bytesSent, totalBytes);
+            return callback (bytesSent, totalBytes);
         }
 
-        OpenStreamProgressCallback* callback;
-        void* const data;
+        std::function<bool (int, int)> callback;
     };
 
-    std::unique_ptr<ProgressCallbackCaller> callbackCaller
-        (progressCallback != nullptr ? new ProgressCallbackCaller (progressCallback, progressCallbackContext) : nullptr);
+    auto callbackCaller = [&options]() -> std::unique_ptr<ProgressCallbackCaller>
+    {
+        if (auto progressCallback = options.getProgressCallback())
+            return std::make_unique<ProgressCallbackCaller> (progressCallback);
 
-    if (headers.isNotEmpty())
-        wi->withExtraHeaders (headers);
+        return {};
+    }();
 
-    if (timeOutMs != 0)
-        wi->withConnectionTimeout (timeOutMs);
+    auto success = webInputStream->connect (callbackCaller.get());
 
-    if (httpRequestCmd.isNotEmpty())
-        wi->withCustomRequestCommand (httpRequestCmd);
+    if (auto* status = options.getStatusCode())
+        *status = webInputStream->getStatusCode();
 
-    wi->withNumRedirectsToFollow (numRedirectsToFollow);
+    if (auto* responseHeaders = options.getResponseHeaders())
+        *responseHeaders = webInputStream->getResponseHeaders();
 
-    bool success = wi->connect (callbackCaller.get());
-
-    if (statusCode != nullptr)
-        *statusCode = wi->getStatusCode();
-
-    if (responseHeaders != nullptr)
-        *responseHeaders = wi->getResponseHeaders();
-
-    if (! success || wi->isError())
+    if (! success || webInputStream->isError())
         return nullptr;
 
-    // Older GCCs complain about binding unique_ptr<WebInputStream>&& to unique_ptr<InputStream>
-    // if we just `return wi` here.
-    return std::unique_ptr<InputStream> (std::move (wi));
+    // std::move() needed here for older compilers
+    JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wredundant-move")
+    return std::move (webInputStream);
+    JUCE_END_IGNORE_WARNINGS_GCC_LIKE
 }
-
-#if JUCE_ANDROID
-OutputStream* juce_CreateContentURIOutputStream (const URL&);
-#endif
 
 std::unique_ptr<OutputStream> URL::createOutputStream() const
 {
+   #if JUCE_ANDROID
+    if (auto stream = AndroidDocument::fromDocument (*this).createOutputStream())
+        return stream;
+   #endif
+
     if (isLocalFile())
     {
        #if JUCE_IOS
@@ -741,18 +850,14 @@ std::unique_ptr<OutputStream> URL::createOutputStream() const
        #endif
     }
 
-   #if JUCE_ANDROID
-    return std::unique_ptr<OutputStream> (juce_CreateContentURIOutputStream (*this));
-   #else
     return nullptr;
-   #endif
 }
 
 //==============================================================================
 bool URL::readEntireBinaryStream (MemoryBlock& destData, bool usePostCommand) const
 {
     const std::unique_ptr<InputStream> in (isLocalFile() ? getLocalFile().createInputStream()
-                                                         : createInputStream (usePostCommand));
+                                                         : createInputStream (InputStreamOptions (toHandling (usePostCommand))));
 
     if (in != nullptr)
     {
@@ -766,7 +871,7 @@ bool URL::readEntireBinaryStream (MemoryBlock& destData, bool usePostCommand) co
 String URL::readEntireTextStream (bool usePostCommand) const
 {
     const std::unique_ptr<InputStream> in (isLocalFile() ? getLocalFile().createInputStream()
-                                                         : createInputStream (usePostCommand));
+                                                         : createInputStream (InputStreamOptions (toHandling (usePostCommand))));
 
     if (in != nullptr)
         return in->readEntireStreamAsString();
@@ -799,6 +904,14 @@ URL URL::withParameters (const StringPairArray& parametersToAdd) const
     return u;
 }
 
+URL URL::withAnchor (const String& anchorToAdd) const
+{
+    auto u = *this;
+
+    u.anchor = anchorToAdd;
+    return u;
+}
+
 URL URL::withPOSTData (const String& newPostData) const
 {
     return withPOSTData (MemoryBlock (newPostData.toRawUTF8(), newPostData.getNumBytesAsUTF8()));
@@ -823,7 +936,7 @@ URL URL::withUpload (Upload* const f) const
     auto u = *this;
 
     for (int i = u.filesToUpload.size(); --i >= 0;)
-        if (u.filesToUpload.getObjectPointerUnchecked(i)->parameterName == f->parameterName)
+        if (u.filesToUpload.getObjectPointerUnchecked (i)->parameterName == f->parameterName)
             u.filesToUpload.remove (i);
 
     u.filesToUpload.add (f);
@@ -858,7 +971,7 @@ String URL::removeEscapeChars (const String& s)
 
     for (int i = 0; i < utf8.size(); ++i)
     {
-        if (utf8.getUnchecked(i) == '%')
+        if (utf8.getUnchecked (i) == '%')
         {
             auto hexDigit1 = CharacterFunctions::getHexDigitValue ((juce_wchar) (uint8) utf8 [i + 1]);
             auto hexDigit2 = CharacterFunctions::getHexDigitValue ((juce_wchar) (uint8) utf8 [i + 2]);
@@ -886,7 +999,7 @@ String URL::addEscapeChars (const String& s, bool isParameter, bool roundBracket
 
     for (int i = 0; i < utf8.size(); ++i)
     {
-        auto c = utf8.getUnchecked(i);
+        auto c = utf8.getUnchecked (i);
 
         if (! (CharacterFunctions::isLetterOrDigit (c)
                  || legalChars.containsChar ((juce_wchar) c)))
@@ -909,6 +1022,43 @@ bool URL::launchInDefaultBrowser() const
         u = "mailto:" + u;
 
     return Process::openDocument (u, {});
+}
+
+//==============================================================================
+std::unique_ptr<InputStream> URL::createInputStream (bool usePostCommand,
+                                                     OpenStreamProgressCallback* cb,
+                                                     void* context,
+                                                     String headers,
+                                                     int timeOutMs,
+                                                     StringPairArray* responseHeaders,
+                                                     int* statusCode,
+                                                     int numRedirectsToFollow,
+                                                     String httpRequestCmd) const
+{
+    std::function<bool (int, int)> callback;
+
+    if (cb != nullptr)
+        callback = [context, cb] (int sent, int total) { return cb (context, sent, total); };
+
+    return createInputStream (InputStreamOptions (toHandling (usePostCommand))
+                                .withProgressCallback (std::move (callback))
+                                .withExtraHeaders (headers)
+                                .withConnectionTimeoutMs (timeOutMs)
+                                .withResponseHeaders (responseHeaders)
+                                .withStatusCode (statusCode)
+                                .withNumRedirectsToFollow (numRedirectsToFollow)
+                                .withHttpRequestCmd (httpRequestCmd));
+}
+
+std::unique_ptr<URL::DownloadTask> URL::downloadToFile (const File& targetLocation,
+                                                        String extraHeaders,
+                                                        DownloadTask::Listener* listener,
+                                                        bool usePostCommand)
+{
+    auto options = DownloadTaskOptions().withExtraHeaders (std::move (extraHeaders))
+                                        .withListener (listener)
+                                        .withUsePost (usePostCommand);
+    return downloadToFile (targetLocation, std::move (options));
 }
 
 } // namespace juce

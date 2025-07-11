@@ -36,8 +36,8 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_ROOTFINDER_H
 #define DSPFILTERS_ROOTFINDER_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Types.h"
+#include "Common.h"
+#include "Types.h"
 
 namespace Dsp {
 

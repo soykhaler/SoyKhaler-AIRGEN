@@ -290,7 +290,7 @@ Filter family namespaces
 //
 
 // This is the only include you need
-#include "DspFilters/Dsp.h"
+#include "../DspFilters/Dsp.h"
 
 #include <sstream>
 #include <iostream>

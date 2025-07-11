@@ -18,7 +18,7 @@ http://www.gnu.org/licenses/
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "Compressor.h"
-#include "DspFilters/dsp.h"
+#include "Dsp.h"
 #include "WaveShaper.h"
 
 //==============================================================================

@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -26,138 +35,48 @@
 namespace juce
 {
 
-ImagePixelData::ImagePixelData (Image::PixelFormat format, int w, int h)
-    : pixelFormat (format), width (w), height (h)
+struct BitmapDataDetail
 {
-    jassert (format == Image::RGB || format == Image::ARGB || format == Image::SingleChannel);
-    jassert (w > 0 && h > 0); // It's illegal to create a zero-sized image!
-}
+    BitmapDataDetail() = delete;
 
-ImagePixelData::~ImagePixelData()
-{
-    listeners.call ([this] (Listener& l) { l.imageDataBeingDeleted (this); });
-}
-
-void ImagePixelData::sendDataChangeMessage()
-{
-    listeners.call ([this] (Listener& l) { l.imageDataChanged (this); });
-}
-
-int ImagePixelData::getSharedCount() const noexcept
-{
-    return getReferenceCount();
-}
-
-//==============================================================================
-ImageType::ImageType() {}
-ImageType::~ImageType() {}
-
-Image ImageType::convert (const Image& source) const
-{
-    if (source.isNull() || getTypeID() == source.getPixelData()->createType()->getTypeID())
-        return source;
-
-    const Image::BitmapData src (source, Image::BitmapData::readOnly);
-
-    Image newImage (create (src.pixelFormat, src.width, src.height, false));
-    Image::BitmapData dest (newImage, Image::BitmapData::writeOnly);
-
-    if (src.pixelStride == dest.pixelStride && src.pixelFormat == dest.pixelFormat)
+    static void convert (const Image::BitmapData& src, Image::BitmapData& dest)
     {
-        for (int y = 0; y < dest.height; ++y)
-            memcpy (dest.getLinePointer (y), src.getLinePointer (y), (size_t) dest.lineStride);
-    }
-    else
-    {
-        for (int y = 0; y < dest.height; ++y)
-            for (int x = 0; x < dest.width; ++x)
-                dest.setPixelColour (x, y, src.getPixelColour (x, y));
+        jassert (src.width == dest.width);
+        jassert (src.height == dest.height);
+
+        if (src.pixelStride == dest.pixelStride && src.pixelFormat == dest.pixelFormat)
+        {
+            for (int y = 0; y < dest.height; ++y)
+                memcpy (dest.getLinePointer (y), src.getLinePointer (y), (size_t) dest.pixelStride * (size_t) dest.width);
+        }
+        else
+        {
+            for (int y = 0; y < dest.height; ++y)
+                for (int x = 0; x < dest.width; ++x)
+                    dest.setPixelColour (x, y, src.getPixelColour (x, y));
+        }
     }
 
-    return newImage;
-}
-
-//==============================================================================
-class SoftwarePixelData  : public ImagePixelData
-{
-public:
-    SoftwarePixelData (Image::PixelFormat formatToUse, int w, int h, bool clearImage)
-        : ImagePixelData (formatToUse, w, h),
-          pixelStride (formatToUse == Image::RGB ? 3 : ((formatToUse == Image::ARGB) ? 4 : 1)),
-          lineStride ((pixelStride * jmax (1, w) + 3) & ~3)
+    static Image convert (const Image::BitmapData& src, const ImageType& type)
     {
-        imageData.allocate ((size_t) lineStride * (size_t) jmax (1, h), clearImage);
+        Image result (type.create (src.pixelFormat, src.width, src.height, false));
+
+        {
+            Image::BitmapData dest (result, Image::BitmapData::writeOnly);
+            BitmapDataDetail::convert (src, dest);
+        }
+
+        return result;
     }
-
-    std::unique_ptr<LowLevelGraphicsContext> createLowLevelContext() override
-    {
-        sendDataChangeMessage();
-        return std::make_unique<LowLevelGraphicsSoftwareRenderer> (Image (*this));
-    }
-
-    void initialiseBitmapData (Image::BitmapData& bitmap, int x, int y, Image::BitmapData::ReadWriteMode mode) override
-    {
-        bitmap.data = imageData + (size_t) x * (size_t) pixelStride + (size_t) y * (size_t) lineStride;
-        bitmap.pixelFormat = pixelFormat;
-        bitmap.lineStride = lineStride;
-        bitmap.pixelStride = pixelStride;
-
-        if (mode != Image::BitmapData::readOnly)
-            sendDataChangeMessage();
-    }
-
-    ImagePixelData::Ptr clone() override
-    {
-        auto s = new SoftwarePixelData (pixelFormat, width, height, false);
-        memcpy (s->imageData, imageData, (size_t) lineStride * (size_t) height);
-        return *s;
-    }
-
-    std::unique_ptr<ImageType> createType() const override    { return std::make_unique<SoftwareImageType>(); }
-
-private:
-    HeapBlock<uint8> imageData;
-    const int pixelStride, lineStride;
-
-    JUCE_LEAK_DETECTOR (SoftwarePixelData)
 };
 
-SoftwareImageType::SoftwareImageType() {}
-SoftwareImageType::~SoftwareImageType() {}
-
-ImagePixelData::Ptr SoftwareImageType::create (Image::PixelFormat format, int width, int height, bool clearImage) const
-{
-    return *new SoftwarePixelData (format, width, height, clearImage);
-}
-
-int SoftwareImageType::getTypeID() const
-{
-    return 2;
-}
-
-//==============================================================================
-NativeImageType::NativeImageType() {}
-NativeImageType::~NativeImageType() {}
-
-int NativeImageType::getTypeID() const
-{
-    return 1;
-}
-
-#if JUCE_WINDOWS || JUCE_LINUX
-ImagePixelData::Ptr NativeImageType::create (Image::PixelFormat format, int width, int height, bool clearImage) const
-{
-    return new SoftwarePixelData (format, width, height, clearImage);
-}
-#endif
-
-//==============================================================================
-class SubsectionPixelData  : public ImagePixelData
+class SubsectionPixelData : public ImagePixelData
 {
 public:
     SubsectionPixelData (ImagePixelData::Ptr source, Rectangle<int> r)
         : ImagePixelData (source->pixelFormat, r.getWidth(), r.getHeight()),
-          sourceImage (std::move (source)), area (r)
+          sourceImage (std::move (source)),
+          area (r)
     {
     }
 
@@ -192,10 +111,10 @@ public:
         return *newImage.getPixelData();
     }
 
-    std::unique_ptr<ImageType> createType() const override          { return sourceImage->createType(); }
+    std::unique_ptr<ImageType> createType() const override { return sourceImage->createType(); }
 
     /* as we always hold a reference to image, don't double count */
-    int getSharedCount() const noexcept override    { return getReferenceCount() + sourceImage->getSharedCount() - 1; }
+    int getSharedCount() const noexcept override { return getReferenceCount() + sourceImage->getSharedCount() - 1; }
 
 private:
     friend class Image;
@@ -204,6 +123,134 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SubsectionPixelData)
 };
+
+//==============================================================================
+ImagePixelData::ImagePixelData (Image::PixelFormat format, int w, int h)
+    : pixelFormat (format), width (w), height (h)
+{
+    jassert (format == Image::RGB || format == Image::ARGB || format == Image::SingleChannel);
+    jassert (w > 0 && h > 0); // It's illegal to create a zero-sized image!
+}
+
+ImagePixelData::~ImagePixelData()
+{
+    listeners.call ([this] (Listener& l) { l.imageDataBeingDeleted (this); });
+}
+
+void ImagePixelData::sendDataChangeMessage()
+{
+    listeners.call ([this] (Listener& l) { l.imageDataChanged (this); });
+}
+
+int ImagePixelData::getSharedCount() const noexcept
+{
+    return getReferenceCount();
+}
+
+void ImagePixelData::applyGaussianBlurEffect ([[maybe_unused]] float radius, Image& result)
+{
+    result = {};
+}
+
+void ImagePixelData::applySingleChannelBoxBlurEffect ([[maybe_unused]] int radius, juce::Image &result)
+{
+    result = {};
+}
+
+//==============================================================================
+ImageType::ImageType() = default;
+ImageType::~ImageType() = default;
+
+Image ImageType::convert (const Image& source) const
+{
+    if (source.isNull() || getTypeID() == source.getPixelData()->createType()->getTypeID())
+        return source;
+
+    const Image::BitmapData src (source, Image::BitmapData::readOnly);
+
+    if (src.data == nullptr)
+        return {};
+
+    return BitmapDataDetail::convert (src, *this);
+}
+
+//==============================================================================
+class SoftwarePixelData : public ImagePixelData
+{
+public:
+    SoftwarePixelData (Image::PixelFormat formatToUse, int w, int h, bool clearImage)
+        : ImagePixelData (formatToUse, w, h),
+          pixelStride (formatToUse == Image::RGB ? 3 : ((formatToUse == Image::ARGB) ? 4 : 1)),
+          lineStride ((pixelStride * jmax (1, w) + 3) & ~3)
+    {
+        imageData.allocate ((size_t) lineStride * (size_t) jmax (1, h), clearImage);
+    }
+
+    std::unique_ptr<LowLevelGraphicsContext> createLowLevelContext() override
+    {
+        sendDataChangeMessage();
+        return std::make_unique<LowLevelGraphicsSoftwareRenderer> (Image (*this));
+    }
+
+    void initialiseBitmapData (Image::BitmapData& bitmap, int x, int y, Image::BitmapData::ReadWriteMode mode) override
+    {
+        const auto offset = (size_t) x * (size_t) pixelStride + (size_t) y * (size_t) lineStride;
+        bitmap.data = imageData + offset;
+        bitmap.size = (size_t) (height * lineStride) - offset;
+        bitmap.pixelFormat = pixelFormat;
+        bitmap.lineStride = lineStride;
+        bitmap.pixelStride = pixelStride;
+
+        if (mode != Image::BitmapData::readOnly)
+            sendDataChangeMessage();
+    }
+
+    ImagePixelData::Ptr clone() override
+    {
+        auto s = new SoftwarePixelData (pixelFormat, width, height, false);
+        memcpy (s->imageData, imageData, (size_t) lineStride * (size_t) height);
+        return *s;
+    }
+
+    std::unique_ptr<ImageType> createType() const override    { return std::make_unique<SoftwareImageType>(); }
+
+private:
+    HeapBlock<uint8> imageData;
+    const int pixelStride, lineStride;
+
+    JUCE_LEAK_DETECTOR (SoftwarePixelData)
+};
+
+SoftwareImageType::SoftwareImageType() = default;
+SoftwareImageType::~SoftwareImageType() = default;
+
+ImagePixelData::Ptr SoftwareImageType::create (Image::PixelFormat format, int width, int height, bool clearImage) const
+{
+    return *new SoftwarePixelData (format, width, height, clearImage);
+}
+
+int SoftwareImageType::getTypeID() const
+{
+    return 2;
+}
+
+//==============================================================================
+NativeImageType::NativeImageType() = default;
+NativeImageType::~NativeImageType() = default;
+
+int NativeImageType::getTypeID() const
+{
+    return 1;
+}
+
+#if JUCE_LINUX || JUCE_BSD
+ImagePixelData::Ptr NativeImageType::create (Image::PixelFormat format, int width, int height, bool clearImage) const
+{
+    return new SoftwarePixelData (format, width, height, clearImage);
+}
+#endif
+
+//==============================================================================
 
 Image Image::getClippedImage (const Rectangle<int>& area) const
 {
@@ -215,14 +262,11 @@ Image Image::getClippedImage (const Rectangle<int>& area) const
     if (validArea.isEmpty())
         return {};
 
-    return Image (*new SubsectionPixelData (image, validArea));
+    return Image { ImagePixelData::Ptr { new SubsectionPixelData { image, validArea } } };
 }
-
 
 //==============================================================================
-Image::Image() noexcept
-{
-}
+Image::Image() noexcept = default;
 
 Image::Image (ReferenceCountedObjectPtr<ImagePixelData> instance) noexcept
     : image (std::move (instance))
@@ -261,13 +305,15 @@ Image& Image::operator= (Image&& other) noexcept
     return *this;
 }
 
-Image::~Image()
-{
-}
-
-JUCE_DECLARE_DEPRECATED_STATIC (const Image Image::null;)
+Image::~Image() = default;
 
 int Image::getReferenceCount() const noexcept           { return image == nullptr ? 0 : image->getSharedCount(); }
+
+bool Image::isValid() const noexcept
+{
+    return image != nullptr;
+}
+
 int Image::getWidth() const noexcept                    { return image == nullptr ? 0 : image->width; }
 int Image::getHeight() const noexcept                   { return image == nullptr ? 0 : image->height; }
 Rectangle<int> Image::getBounds() const noexcept        { return image == nullptr ? Rectangle<int>() : Rectangle<int> (image->width, image->height); }
@@ -452,12 +498,12 @@ void Image::BitmapData::setPixelColour (int x, int y, Colour colour) const noexc
 //==============================================================================
 void Image::clear (const Rectangle<int>& area, Colour colourToClearTo)
 {
-    if (image != nullptr)
-    {
-        auto g = image->createLowLevelContext();
-        g->setFill (colourToClearTo);
-        g->fillRect (area, true);
-    }
+    if (image == nullptr)
+        return;
+
+    auto g = image->createLowLevelContext();
+    g->setFill (colourToClearTo);
+    g->fillRect (area, true);
 }
 
 //==============================================================================
@@ -683,5 +729,123 @@ void Image::moveImageSection (int dx, int dy,
         }
     }
 }
+
+void ImageEffects::applyGaussianBlurEffect (float radius, const Image& input, Image& result)
+{
+    auto* image = input.getPixelData();
+
+    if (image == nullptr)
+    {
+        result = {};
+        return;
+    }
+
+    auto copy = result;
+    image->applyGaussianBlurEffect (radius, copy);
+
+    if (copy.isValid())
+    {
+        result = std::move (copy);
+        return;
+    }
+
+    const auto tie = [] (const auto& x) { return std::tuple (x.getFormat(), x.getWidth(), x.getHeight()); };
+
+    if (tie (input) != tie (result))
+        result = Image { input.getFormat(), input.getWidth(), input.getHeight(), false };
+
+    ImageConvolutionKernel blurKernel (roundToInt (radius * 2.0f));
+
+    blurKernel.createGaussianBlur (radius);
+
+    blurKernel.applyToImage (result, input, result.getBounds());
+}
+
+static void blurDataTriplets (uint8* d, int num, const int delta) noexcept
+{
+    uint32 last = d[0];
+    d[0] = (uint8) ((d[0] + d[delta] + 1) / 3);
+    d += delta;
+
+    num -= 2;
+
+    do
+    {
+        const uint32 newLast = d[0];
+        d[0] = (uint8) ((last + d[0] + d[delta] + 1) / 3);
+        d += delta;
+        last = newLast;
+    }
+    while (--num > 0);
+
+    d[0] = (uint8) ((last + d[0] + 1) / 3);
+}
+
+static void blurSingleChannelImage (uint8* const data, const int width, const int height,
+                                    const int lineStride, const int repetitions) noexcept
+{
+    jassert (width > 2 && height > 2);
+
+    for (int y = 0; y < height; ++y)
+        for (int i = repetitions; --i >= 0;)
+            blurDataTriplets (data + lineStride * y, width, 1);
+
+    for (int x = 0; x < width; ++x)
+        for (int i = repetitions; --i >= 0;)
+            blurDataTriplets (data + x, height, lineStride);
+}
+
+static void blurSingleChannelImage (Image& image, int radius)
+{
+    const Image::BitmapData bm (image, Image::BitmapData::readWrite);
+    blurSingleChannelImage (bm.data, bm.width, bm.height, bm.lineStride, 2 * radius);
+}
+
+void ImageEffects::applySingleChannelBoxBlurEffect (int radius, const Image& input, Image& result)
+{
+    auto* image = input.getPixelData();
+
+    if (image == nullptr)
+    {
+        result = {};
+        return;
+    }
+
+    auto copy = result;
+    image->applySingleChannelBoxBlurEffect (radius, copy);
+
+    if (copy.isValid())
+    {
+        result = std::move (copy);
+        return;
+    }
+
+    const auto inputConfig = std::tuple (Image::SingleChannel, input.getWidth(), input.getHeight());
+    const auto outputConfig = std::tuple (result.getFormat(), result.getWidth(), result.getHeight());
+
+    if (inputConfig != outputConfig)
+        result = Image { Image::SingleChannel, input.getWidth(), input.getHeight(), false };
+
+    {
+        Image::BitmapData source { input, Image::BitmapData::readOnly };
+        Image::BitmapData dest { result, Image::BitmapData::writeOnly };
+        BitmapDataDetail::convert (source, dest);
+    }
+
+    blurSingleChannelImage (result, radius);
+}
+
+//==============================================================================
+#if JUCE_ALLOW_STATIC_NULL_VARIABLES
+
+JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wdeprecated-declarations")
+JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4996)
+
+const Image Image::null;
+
+JUCE_END_IGNORE_WARNINGS_GCC_LIKE
+JUCE_END_IGNORE_WARNINGS_MSVC
+
+#endif
 
 } // namespace juce

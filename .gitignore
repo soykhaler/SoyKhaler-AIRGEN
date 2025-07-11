@@ -250,3 +250,4 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
+Builds/LinuxMakefile/build/SoyKhaler-AIRGEN.lv2/SoyKhaler-AIRGEN.so

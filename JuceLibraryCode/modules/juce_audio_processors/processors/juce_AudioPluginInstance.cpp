@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -34,6 +43,8 @@ PluginDescription AudioPluginInstance::getPluginDescription() const
 }
 
 void* AudioPluginInstance::getPlatformSpecificData() { return nullptr; }
+
+void AudioPluginInstance::getExtensions (ExtensionsVisitor& visitor) const { visitor.visitUnknown ({}); }
 
 String AudioPluginInstance::getParameterID (int parameterIndex)
 {
@@ -209,22 +220,15 @@ void AudioPluginInstance::assertOnceOnDeprecatedMethodUse() const noexcept
 bool AudioPluginInstance::deprecationAssertiontriggered = false;
 
 AudioPluginInstance::Parameter::Parameter()
+    : onStrings  { TRANS ("on"),  TRANS ("yes"), TRANS ("true") },
+      offStrings { TRANS ("off"), TRANS ("no"),  TRANS ("false") }
 {
-    onStrings.add (TRANS("on"));
-    onStrings.add (TRANS("yes"));
-    onStrings.add (TRANS("true"));
-
-    offStrings.add (TRANS("off"));
-    offStrings.add (TRANS("no"));
-    offStrings.add (TRANS("false"));
 }
-
-AudioPluginInstance::Parameter::~Parameter() {}
 
 String AudioPluginInstance::Parameter::getText (float value, int maximumStringLength) const
 {
     if (isBoolean())
-        return value < 0.5f ? TRANS("Off") : TRANS("On");
+        return value < 0.5f ? TRANS ("Off") : TRANS ("On");
 
     return String (value).substring (0, maximumStringLength);
 }
@@ -245,6 +249,46 @@ float AudioPluginInstance::Parameter::getValueForText (const String& text) const
     }
 
     return floatValue;
+}
+
+void AudioPluginInstance::addHostedParameter (std::unique_ptr<HostedParameter> param)
+{
+    addParameter (param.release());
+}
+
+void AudioPluginInstance::addHostedParameterGroup (std::unique_ptr<AudioProcessorParameterGroup> group)
+{
+   #if JUCE_DEBUG
+    // All parameters *must* be HostedParameters, otherwise getHostedParameter will return
+    // garbage and your host will crash and burn
+    for (auto* param : group->getParameters (true))
+    {
+        jassert (dynamic_cast<HostedParameter*> (param) != nullptr);
+    }
+   #endif
+
+    addParameterGroup (std::move (group));
+}
+
+void AudioPluginInstance::setHostedParameterTree (AudioProcessorParameterGroup group)
+{
+   #if JUCE_DEBUG
+    // All parameters *must* be HostedParameters, otherwise getHostedParameter will return
+    // garbage and your host will crash and burn
+    for (auto* param : group.getParameters (true))
+    {
+        jassert (dynamic_cast<HostedParameter*> (param) != nullptr);
+    }
+   #endif
+
+    setParameterTree (std::move (group));
+}
+
+AudioPluginInstance::HostedParameter* AudioPluginInstance::getHostedParameter (int index) const
+{
+    // It's important that all AudioPluginInstance implementations
+    // only ever own HostedParameters!
+    return static_cast<HostedParameter*> (getParameters()[index]);
 }
 
 } // namespace juce

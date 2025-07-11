@@ -36,8 +36,8 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_DESIGN_H
 #define DSPFILTERS_DESIGN_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Params.h"
+#include "Common.h"
+#include "Params.h"
 
 namespace Dsp {
 

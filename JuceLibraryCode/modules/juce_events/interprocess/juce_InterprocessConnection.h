@@ -1,21 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   The code included in this file is provided under the terms of the ISC license
-   http://www.isc.org/downloads/software-support-policy/isc-license. Permission
-   To use, copy, modify, and/or distribute this software for any purpose with or
-   without fee is hereby granted provided that the above copyright notice and
-   this permission notice appear in all copies.
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
+
+   Or:
+
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -42,6 +54,9 @@ class MemoryBlock;
 
     To act as a socket server and create connections for one or more client, see the
     InterprocessConnectionServer class.
+
+    IMPORTANT NOTE: Your derived Connection class *must* call `disconnect` in its destructor
+    in order to cancel any pending messages before the class is destroyed.
 
     @see InterprocessConnectionServer, Socket, NamedPipe
 
@@ -117,8 +132,18 @@ public:
     */
     bool createPipe (const String& pipeName, int pipeReceiveMessageTimeoutMs, bool mustNotExist = false);
 
-    /** Disconnects and closes any currently-open sockets or pipes. */
-    void disconnect();
+    /** Whether the disconnect call should trigger callbacks. */
+    enum class Notify { no, yes };
+
+    /** Disconnects and closes any currently-open sockets or pipes.
+
+        Derived classes *must* call this in their destructors in order to avoid undefined
+        behaviour.
+
+        @param timeoutMs      the time in ms to wait before killing the thread by force
+        @param notify         whether or not to call `connectionLost`
+    */
+    void disconnect (int timeoutMs = -1, Notify notify = Notify::yes);
 
     /** True if a socket or pipe is currently active. */
     bool isConnected() const;
@@ -178,7 +203,7 @@ public:
 
 private:
     //==============================================================================
-    CriticalSection pipeAndSocketLock;
+    ReadWriteLock pipeAndSocketLock;
     std::unique_ptr<StreamingSocket> socket;
     std::unique_ptr<NamedPipe> pipe;
     bool callbackConnectionState = false;
@@ -187,8 +212,9 @@ private:
     int pipeReceiveMessageTimeout = -1;
 
     friend class InterprocessConnectionServer;
-    void initialiseWithSocket (StreamingSocket*);
-    void initialiseWithPipe (NamedPipe*);
+    void initialise();
+    void initialiseWithSocket (std::unique_ptr<StreamingSocket>);
+    void initialiseWithPipe (std::unique_ptr<NamedPipe>);
     void deletePipeAndSocket();
     void connectionMadeInt();
     void connectionLostInt();
@@ -200,10 +226,12 @@ private:
     std::unique_ptr<ConnectionThread> thread;
     std::atomic<bool> threadIsRunning { false };
 
+    class SafeAction;
+    std::shared_ptr<SafeAction> safeAction;
+
     void runThread();
     int writeData (void*, int);
 
-    JUCE_DECLARE_WEAK_REFERENCEABLE (InterprocessConnection)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InterprocessConnection)
 };
 

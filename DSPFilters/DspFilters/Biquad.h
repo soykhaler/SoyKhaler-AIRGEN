@@ -36,9 +36,9 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_BIQUAD_H
 #define DSPFILTERS_BIQUAD_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\MathSupplement.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Types.h"
+#include "Common.h"
+#include "MathSupplement.h"
+#include "Types.h"
 
 namespace Dsp {
 

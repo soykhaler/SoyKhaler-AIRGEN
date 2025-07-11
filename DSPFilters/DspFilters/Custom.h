@@ -36,10 +36,10 @@ THE SOFTWARE.
 #ifndef DSPFILTERS_CUSTOM_H
 #define DSPFILTERS_CUSTOM_H
 
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Common.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Biquad.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Design.h"
-#include "C:\Users\SoyKhaler\Desktop\Roth-AIR-master - copia\DSPFilters\DspFilters\Filter.h"
+#include "Common.h"
+#include "Biquad.h"
+#include "Design.h"
+#include "Filter.h"
 
 namespace Dsp {
 

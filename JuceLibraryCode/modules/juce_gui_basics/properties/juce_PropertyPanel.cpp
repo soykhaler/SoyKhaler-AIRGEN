@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -26,13 +35,15 @@
 namespace juce
 {
 
-struct PropertyPanel::SectionComponent  : public Component
+struct PropertyPanel::SectionComponent final : public Component
 {
     SectionComponent (const String& sectionTitle,
                       const Array<PropertyComponent*>& newProperties,
-                      bool sectionIsOpen)
+                      bool sectionIsOpen,
+                      int extraPadding)
         : Component (sectionTitle),
-          isOpen (sectionIsOpen)
+          isOpen (sectionIsOpen),
+          padding (extraPadding)
     {
         lookAndFeelChanged();
 
@@ -63,7 +74,7 @@ struct PropertyPanel::SectionComponent  : public Component
         for (auto* propertyComponent : propertyComps)
         {
             propertyComponent->setBounds (1, y, getWidth() - 2, propertyComponent->getPreferredHeight());
-            y = propertyComponent->getBottom();
+            y = propertyComponent->getBottom() + padding;
         }
     }
 
@@ -78,9 +89,15 @@ struct PropertyPanel::SectionComponent  : public Component
     {
         auto y = titleHeight;
 
-        if (isOpen)
+        auto numComponents = propertyComps.size();
+
+        if (numComponents > 0 && isOpen)
+        {
             for (auto* propertyComponent : propertyComps)
                 y += propertyComponent->getPreferredHeight();
+
+            y += (numComponents - 1) * padding;
+        }
 
         return y;
     }
@@ -122,12 +139,13 @@ struct PropertyPanel::SectionComponent  : public Component
     OwnedArray<PropertyComponent> propertyComps;
     int titleHeight;
     bool isOpen;
+    int padding;
 
     JUCE_DECLARE_NON_COPYABLE (SectionComponent)
 };
 
 //==============================================================================
-struct PropertyPanel::PropertyHolderComponent  : public Component
+struct PropertyPanel::PropertyHolderComponent final : public Component
 {
     PropertyHolderComponent() {}
 
@@ -191,11 +209,11 @@ PropertyPanel::PropertyPanel (const String& name)  : Component (name)
 
 void PropertyPanel::init()
 {
-    messageWhenEmpty = TRANS("(nothing selected)");
+    messageWhenEmpty = TRANS ("(nothing selected)");
 
     addAndMakeVisible (viewport);
     viewport.setViewedComponent (propertyHolderComponent = new PropertyHolderComponent());
-    viewport.setFocusContainer (true);
+    viewport.setFocusContainerType (FocusContainerType::keyboardFocusContainer);
 }
 
 PropertyPanel::~PropertyPanel()
@@ -241,26 +259,32 @@ int PropertyPanel::getTotalContentHeight() const
     return propertyHolderComponent->getHeight();
 }
 
-void PropertyPanel::addProperties (const Array<PropertyComponent*>& newProperties)
+void PropertyPanel::addProperties (const Array<PropertyComponent*>& newProperties,
+                                   int extraPaddingBetweenComponents)
 {
     if (isEmpty())
         repaint();
 
-    propertyHolderComponent->insertSection (-1, new SectionComponent (String(), newProperties, true));
+    propertyHolderComponent->insertSection (-1, new SectionComponent ({}, newProperties, true, extraPaddingBetweenComponents));
     updatePropHolderLayout();
 }
 
 void PropertyPanel::addSection (const String& sectionTitle,
                                 const Array<PropertyComponent*>& newProperties,
                                 bool shouldBeOpen,
-                                int indexToInsertAt)
+                                int indexToInsertAt,
+                                int extraPaddingBetweenComponents)
 {
     jassert (sectionTitle.isNotEmpty());
 
     if (isEmpty())
         repaint();
 
-    propertyHolderComponent->insertSection (indexToInsertAt, new SectionComponent (sectionTitle, newProperties, shouldBeOpen));
+    propertyHolderComponent->insertSection (indexToInsertAt, new SectionComponent (sectionTitle,
+                                                                                   newProperties,
+                                                                                   shouldBeOpen,
+                                                                                   extraPaddingBetweenComponents));
+
     updatePropHolderLayout();
 }
 
@@ -352,7 +376,7 @@ void PropertyPanel::restoreOpennessState (const XmlElement& xml)
     {
         auto sections = getSectionNames();
 
-        forEachXmlChildElementWithTagName (xml, e, "SECTION")
+        for (auto* e : xml.getChildWithTagNameIterator ("SECTION"))
         {
             setSectionOpen (sections.indexOf (e->getStringAttribute ("name")),
                             e->getBoolAttribute ("open"));

@@ -45,6 +45,7 @@ public:
     Result requestStop() override;
 
 protected:
+    Result requestPause_l();
 
     void setFramesRead(int64_t framesRead);
 
@@ -59,6 +60,8 @@ private:
     Result onAfterDestroy() override;
 
     Result requestFlush_l();
+
+    Result requestStop_l();
 
     /**
      * Set OpenSL ES PLAYSTATE.

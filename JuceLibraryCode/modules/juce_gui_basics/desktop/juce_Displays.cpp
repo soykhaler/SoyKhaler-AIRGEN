@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -36,10 +45,10 @@ void Displays::init (Desktop& desktop)
     findDisplays (desktop.getGlobalScaleFactor());
 }
 
-const Displays::Display& Displays::findDisplayForRect (Rectangle<int> rect, bool isPhysical) const noexcept
+const Displays::Display* Displays::getDisplayForRect (Rectangle<int> rect, bool isPhysical) const noexcept
 {
     int maxArea = -1;
-    const Display* retVal = nullptr;
+    const Display* foundDisplay = nullptr;
 
     for (auto& display : displays)
     {
@@ -54,17 +63,17 @@ const Displays::Display& Displays::findDisplayForRect (Rectangle<int> rect, bool
         if (area >= maxArea)
         {
             maxArea = area;
-            retVal = &display;
+            foundDisplay = &display;
         }
     }
 
-    return *retVal;
+    return foundDisplay;
 }
 
-const Displays::Display& Displays::findDisplayForPoint (Point<int> point, bool isPhysical) const noexcept
+const Displays::Display* Displays::getDisplayForPoint (Point<int> point, bool isPhysical) const noexcept
 {
     auto minDistance = std::numeric_limits<int>::max();
-    const Display* retVal = nullptr;
+    const Display* foundDisplay = nullptr;
 
     for (auto& display : displays)
     {
@@ -74,78 +83,98 @@ const Displays::Display& Displays::findDisplayForPoint (Point<int> point, bool i
             displayArea = (displayArea.withZeroOrigin() * display.scale) + display.topLeftPhysical;
 
         if (displayArea.contains (point))
-            return display;
+            return &display;
 
         auto distance = displayArea.getCentre().getDistanceFrom (point);
+
         if (distance <= minDistance)
         {
             minDistance = distance;
-            retVal = &display;
+            foundDisplay = &display;
         }
     }
 
-    return *retVal;
+    return foundDisplay;
 }
 
 Rectangle<int> Displays::physicalToLogical (Rectangle<int> rect, const Display* useScaleFactorOfDisplay) const noexcept
 {
-    auto& display = useScaleFactorOfDisplay != nullptr ? *useScaleFactorOfDisplay
-                                                       : findDisplayForRect (rect, true);
+    return physicalToLogical (rect.toFloat(), useScaleFactorOfDisplay).toNearestInt();
+}
+
+Rectangle<float> Displays::physicalToLogical (Rectangle<float> rect, const Display* useScaleFactorOfDisplay) const noexcept
+{
+    const auto* display = useScaleFactorOfDisplay != nullptr ? useScaleFactorOfDisplay
+                                                             : getDisplayForRect (rect.toNearestInt(), true);
+
+    if (display == nullptr)
+        return rect;
 
     auto globalScale = Desktop::getInstance().getGlobalScaleFactor();
 
-    return ((rect.toFloat() - display.topLeftPhysical.toFloat()) / (display.scale / globalScale)).toNearestInt() + (display.totalArea.getTopLeft() * globalScale);
+    return ((rect - display->topLeftPhysical.toFloat()) / (display->scale / globalScale))
+            + (display->totalArea.getTopLeft().toFloat() * globalScale);
 }
 
 Rectangle<int> Displays::logicalToPhysical (Rectangle<int> rect, const Display* useScaleFactorOfDisplay) const noexcept
 {
-    auto& display = useScaleFactorOfDisplay != nullptr ? *useScaleFactorOfDisplay
-                                                       : findDisplayForRect (rect, false);
+    return logicalToPhysical (rect.toFloat(), useScaleFactorOfDisplay).toNearestInt();
+}
+
+Rectangle<float> Displays::logicalToPhysical (Rectangle<float> rect, const Display* useScaleFactorOfDisplay) const noexcept
+{
+    const auto* display = useScaleFactorOfDisplay != nullptr ? useScaleFactorOfDisplay
+                                                             : getDisplayForRect (rect.toNearestInt(), false);
+
+    if (display == nullptr)
+        return rect;
 
     auto globalScale = Desktop::getInstance().getGlobalScaleFactor();
 
-    return ((rect.toFloat() - (display.totalArea.getTopLeft().toFloat() * globalScale)) * (display.scale / globalScale)).toNearestInt() + display.topLeftPhysical;
+    return ((rect.toFloat() - (display->totalArea.getTopLeft().toFloat() * globalScale)) * (display->scale / globalScale))
+             + display->topLeftPhysical.toFloat();
 }
 
 template <typename ValueType>
 Point<ValueType> Displays::physicalToLogical (Point<ValueType> point, const Display* useScaleFactorOfDisplay) const noexcept
 {
-    auto& display = useScaleFactorOfDisplay != nullptr ? *useScaleFactorOfDisplay
-                                                       : findDisplayForPoint (point.roundToInt(), true);
+    const auto* display = useScaleFactorOfDisplay != nullptr ? useScaleFactorOfDisplay
+                                                             : getDisplayForPoint (point.roundToInt(), true);
+
+    if (display == nullptr)
+        return point;
 
     auto globalScale = Desktop::getInstance().getGlobalScaleFactor();
 
-    Point<ValueType> logicalTopLeft  (static_cast<ValueType> (display.totalArea.getX()),       static_cast<ValueType> (display.totalArea.getY()));
-    Point<ValueType> physicalTopLeft (static_cast<ValueType> (display.topLeftPhysical.getX()), static_cast<ValueType> (display.topLeftPhysical.getY()));
+    Point<ValueType> logicalTopLeft  (static_cast<ValueType> (display->totalArea.getX()),       static_cast<ValueType> (display->totalArea.getY()));
+    Point<ValueType> physicalTopLeft (static_cast<ValueType> (display->topLeftPhysical.getX()), static_cast<ValueType> (display->topLeftPhysical.getY()));
 
-    return ((point - physicalTopLeft) / (display.scale / globalScale)) + (logicalTopLeft * globalScale);
+    return ((point - physicalTopLeft) / (display->scale / globalScale)) + (logicalTopLeft * globalScale);
 }
 
 template <typename ValueType>
 Point<ValueType> Displays::logicalToPhysical (Point<ValueType> point, const Display* useScaleFactorOfDisplay)  const noexcept
 {
-    auto& display = useScaleFactorOfDisplay != nullptr ? *useScaleFactorOfDisplay
-                                                       : findDisplayForPoint (point.roundToInt(), false);
+    const auto* display = useScaleFactorOfDisplay != nullptr ? useScaleFactorOfDisplay
+                                                             : getDisplayForPoint (point.roundToInt(), false);
+
+    if (display == nullptr)
+        return point;
 
     auto globalScale = Desktop::getInstance().getGlobalScaleFactor();
 
-    Point<ValueType> logicalTopLeft  (static_cast<ValueType> (display.totalArea.getX()),       static_cast<ValueType> (display.totalArea.getY()));
-    Point<ValueType> physicalTopLeft (static_cast<ValueType> (display.topLeftPhysical.getX()), static_cast<ValueType> (display.topLeftPhysical.getY()));
+    Point<ValueType> logicalTopLeft  (static_cast<ValueType> (display->totalArea.getX()),       static_cast<ValueType> (display->totalArea.getY()));
+    Point<ValueType> physicalTopLeft (static_cast<ValueType> (display->topLeftPhysical.getX()), static_cast<ValueType> (display->topLeftPhysical.getY()));
 
-    return ((point - (logicalTopLeft * globalScale)) * (display.scale / globalScale)) + physicalTopLeft;
+    return ((point - (logicalTopLeft * globalScale)) * (display->scale / globalScale)) + physicalTopLeft;
 }
 
-const Displays::Display& Displays::getMainDisplay() const noexcept
+const Displays::Display* Displays::getPrimaryDisplay() const noexcept
 {
     JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED
 
-    for (auto& d : displays)
-        if (d.isMain)
-            return d;
-
-    // no main display!
-    jassertfalse;
-    return displays.getReference (0);
+    const auto iter = std::find_if (displays.begin(), displays.end(), [] (auto& d) { return d.isMain; });
+    return iter != displays.end() ? iter : nullptr;
 }
 
 RectangleList<int> Displays::getRectangleList (bool userAreasOnly) const
@@ -179,45 +208,21 @@ void Displays::refresh()
     }
 }
 
-bool operator== (const Displays::Display& d1, const Displays::Display& d2) noexcept;
-bool operator== (const Displays::Display& d1, const Displays::Display& d2) noexcept
+static auto tie (const Displays::Display& d)
 {
-    return d1.isMain          == d2.isMain
-        && d1.totalArea       == d2.totalArea
-        && d1.userArea        == d2.userArea
-        && d1.topLeftPhysical == d2.topLeftPhysical
-        && d1.scale           == d2.scale
-        && d1.dpi             == d2.dpi;
+    return std::tie (d.dpi,
+                     d.isMain,
+                     d.keyboardInsets,
+                     d.safeAreaInsets,
+                     d.scale,
+                     d.topLeftPhysical,
+                     d.totalArea,
+                     d.userArea);
 }
 
-bool operator!= (const Displays::Display& d1, const Displays::Display& d2) noexcept;
-bool operator!= (const Displays::Display& d1, const Displays::Display& d2) noexcept    { return ! (d1 == d2); }
-
-// Deprecated method
-const Displays::Display& Displays::getDisplayContaining (Point<int> position) const noexcept
+static bool operator== (const Displays::Display& d1, const Displays::Display& d2) noexcept
 {
-    JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED
-    const auto* best = &displays.getReference (0);
-    auto bestDistance = std::numeric_limits<int>::max();
-
-    for (auto& d : displays)
-    {
-        if (d.totalArea.contains (position))
-        {
-            best = &d;
-            break;
-        }
-
-        auto distance = d.totalArea.getCentre().getDistanceFrom (position);
-
-        if (distance < bestDistance)
-        {
-            bestDistance = distance;
-            best = &d;
-        }
-    }
-
-    return *best;
+    return tie (d1) == tie (d2);
 }
 
 //==============================================================================
@@ -264,10 +269,10 @@ static void processDisplay (DisplayNode* currentNode, Array<DisplayNode>& allNod
 
         Rectangle<double> logicalArea (0.0, 0.0, logicalWidth, logicalHeight);
 
-        if      (physicalArea.getRight() == physicalParentArea.getX())     logicalArea.setPosition ({ logicalParentArea.getX() - logicalWidth, physicalArea.getY() / parentScale });  // on left
-        else if (physicalArea.getX() == physicalParentArea.getRight())     logicalArea.setPosition ({ logicalParentArea.getRight(),  physicalArea.getY() / parentScale });            // on right
-        else if (physicalArea.getBottom() == physicalParentArea.getY())    logicalArea.setPosition ({ physicalArea.getX() / parentScale, logicalParentArea.getY() - logicalHeight }); // on top
-        else if (physicalArea.getY() == physicalParentArea.getBottom())    logicalArea.setPosition ({ physicalArea.getX() / parentScale, logicalParentArea.getBottom() });            // on bottom
+        if      (approximatelyEqual (physicalArea.getRight(), physicalParentArea.getX()))     logicalArea.setPosition ({ logicalParentArea.getX() - logicalWidth, physicalArea.getY() / parentScale });  // on left
+        else if (approximatelyEqual (physicalArea.getX(), physicalParentArea.getRight()))     logicalArea.setPosition ({ logicalParentArea.getRight(),  physicalArea.getY() / parentScale });            // on right
+        else if (approximatelyEqual (physicalArea.getBottom(), physicalParentArea.getY()))    logicalArea.setPosition ({ physicalArea.getX() / parentScale, logicalParentArea.getY() - logicalHeight }); // on top
+        else if (approximatelyEqual (physicalArea.getY(), physicalParentArea.getBottom()))    logicalArea.setPosition ({ physicalArea.getX() / parentScale, logicalParentArea.getBottom() });            // on bottom
         else                                                               jassertfalse;
 
         currentNode->logicalArea = logicalArea;
@@ -290,8 +295,8 @@ static void processDisplay (DisplayNode* currentNode, Array<DisplayNode>& allNod
         const auto otherPhysicalArea = node.display->totalArea.toDouble();
 
         // If the displays are touching on any side
-        if (otherPhysicalArea.getX() == physicalArea.getRight()  || otherPhysicalArea.getRight() == physicalArea.getX()
-            || otherPhysicalArea.getY() == physicalArea.getBottom() || otherPhysicalArea.getBottom() == physicalArea.getY())
+        if (approximatelyEqual (otherPhysicalArea.getX(), physicalArea.getRight())  || approximatelyEqual (otherPhysicalArea.getRight(),  physicalArea.getX())
+         || approximatelyEqual (otherPhysicalArea.getY(), physicalArea.getBottom()) || approximatelyEqual (otherPhysicalArea.getBottom(), physicalArea.getY()))
         {
             node.parent = currentNode;
             children.add (&node);
@@ -352,7 +357,9 @@ void Displays::updateToLogical()
             }
         }
 
-        retVal->isRoot = true;
+        if (retVal != nullptr)
+            retVal->isRoot = true;
+
         return retVal;
     }();
 
@@ -384,5 +391,57 @@ void Displays::updateToLogical()
  template Point<int>   Displays::logicalToPhysical (Point<int>,   const Display*) const noexcept;
  template Point<float> Displays::logicalToPhysical (Point<float>, const Display*) const noexcept;
 #endif
+
+//==============================================================================
+// Deprecated methods
+const Displays::Display& Displays::getDisplayContaining (Point<int> position) const noexcept
+{
+    JUCE_ASSERT_MESSAGE_MANAGER_IS_LOCKED
+    const auto* best = &displays.getReference (0);
+    auto bestDistance = std::numeric_limits<int>::max();
+
+    for (auto& d : displays)
+    {
+        if (d.totalArea.contains (position))
+        {
+            best = &d;
+            break;
+        }
+
+        auto distance = d.totalArea.getCentre().getDistanceFrom (position);
+
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            best = &d;
+        }
+    }
+
+    return *best;
+}
+
+const Displays::Display& Displays::findDisplayForRect (Rectangle<int> rect, bool isPhysical) const noexcept
+{
+    if (auto* display = getDisplayForRect (rect, isPhysical))
+        return *display;
+
+    return emptyDisplay;
+}
+
+const Displays::Display& Displays::findDisplayForPoint (Point<int> point, bool isPhysical) const noexcept
+{
+    if (auto* display = getDisplayForPoint (point, isPhysical))
+        return *display;
+
+    return emptyDisplay;
+}
+
+const Displays::Display& Displays::getMainDisplay() const noexcept
+{
+    if (auto* display = getPrimaryDisplay())
+        return *display;
+
+    return emptyDisplay;
+}
 
 } // namespace juce

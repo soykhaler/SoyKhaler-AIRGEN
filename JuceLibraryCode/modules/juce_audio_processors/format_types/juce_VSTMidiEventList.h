@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -39,6 +48,22 @@ namespace juce
 */
 class VSTMidiEventList
 {
+    // "events" is expected to be a const- or non-const-ref to Vst2::VstEvents.
+    template <typename Events>
+    static auto& getEvent (Events& events, int index)
+    {
+        using EventType = decltype (&*events.events);
+
+        // We static cast rather than using a direct array index here to circumvent
+        // UB sanitizer's bounds-checks. The original struct is supposed to contain
+        // a variable-length array, but the declaration uses a size of "2" for this
+        // member.
+        return static_cast<EventType> (events.events)[index];
+    }
+
+    Vst2::VstEvent* const& getEvent (int index) const { return getEvent (*events, index); }
+    Vst2::VstEvent*      & getEvent (int index)       { return getEvent (*events, index); }
+
 public:
     //==============================================================================
     VSTMidiEventList()
@@ -64,15 +89,16 @@ public:
     {
         ensureSize (numEventsUsed + 1);
 
-        void* const ptr = (Vst2::VstMidiEvent*) (events->events [numEventsUsed]);
-        auto* const e = (Vst2::VstMidiEvent*) ptr;
+        void* const ptr = getEvent (numEventsUsed);
         events->numEvents = ++numEventsUsed;
 
         if (numBytes <= 4)
         {
+            auto* const e = static_cast<Vst2::VstMidiEvent*> (ptr);
+
             if (e->type == Vst2::kVstSysExType)
             {
-                delete[] (((Vst2::VstMidiSysexEvent*) ptr)->sysexDump);
+                delete[] reinterpret_cast<Vst2::VstMidiSysexEvent*> (e)->sysexDump;
                 e->type = Vst2::kVstMidiType;
                 e->byteSize = sizeof (Vst2::VstMidiEvent);
                 e->noteLength = 0;
@@ -86,7 +112,7 @@ public:
         }
         else
         {
-            auto* const se = (Vst2::VstMidiSysexEvent*) ptr;
+            auto* const se = static_cast<Vst2::VstMidiSysexEvent*> (ptr);
 
             if (se->type == Vst2::kVstSysExType)
                 delete[] se->sysexDump;
@@ -111,20 +137,20 @@ public:
     {
         for (int i = 0; i < events->numEvents; ++i)
         {
-            const Vst2::VstEvent* const e = events->events[i];
+            const auto* const e = getEvent (*events, i);
 
             if (e != nullptr)
             {
-                const void* const ptr = events->events[i];
+                const void* const ptr = e;
 
                 if (e->type == Vst2::kVstMidiType)
                 {
-                    dest.addEvent ((const juce::uint8*) ((const Vst2::VstMidiEvent*) ptr)->midiData,
+                    dest.addEvent ((const juce::uint8*) static_cast<const Vst2::VstMidiEvent*> (ptr)->midiData,
                                    4, e->deltaFrames);
                 }
                 else if (e->type == Vst2::kVstSysExType)
                 {
-                    const auto* se = (const Vst2::VstMidiSysexEvent*) ptr;
+                    const auto* se = static_cast<const Vst2::VstMidiSysexEvent*> (ptr);
                     dest.addEvent ((const juce::uint8*) se->sysexDump,
                                    (int) se->dumpBytes,
                                    e->deltaFrames);
@@ -148,7 +174,7 @@ public:
                 events.realloc (size, 1);
 
             for (int i = numEventsAllocated; i < numEventsNeeded; ++i)
-                events->events[i] = allocateVSTEvent();
+                getEvent (i) = allocateVSTEvent();
 
             numEventsAllocated = numEventsNeeded;
         }
@@ -159,7 +185,7 @@ public:
         if (events != nullptr)
         {
             for (int i = numEventsAllocated; --i >= 0;)
-                freeVSTEvent (events->events[i]);
+                freeVSTEvent (getEvent (i));
 
             events.free();
             numEventsUsed = 0;
@@ -175,11 +201,16 @@ private:
 
     static Vst2::VstEvent* allocateVSTEvent()
     {
-        auto e = (Vst2::VstEvent*) std::calloc (1, sizeof (Vst2::VstMidiEvent) > sizeof (Vst2::VstMidiSysexEvent) ? sizeof (Vst2::VstMidiEvent)
-                                                                                            : sizeof (Vst2::VstMidiSysexEvent));
-        e->type = Vst2::kVstMidiType;
-        e->byteSize = sizeof (Vst2::VstMidiEvent);
-        return e;
+        constexpr auto size = jmax (sizeof (Vst2::VstMidiEvent), sizeof (Vst2::VstMidiSysexEvent));
+
+        if (auto* e = static_cast<Vst2::VstEvent*> (std::calloc (1, size)))
+        {
+            e->type = Vst2::kVstMidiType;
+            e->byteSize = sizeof (Vst2::VstMidiEvent);
+            return e;
+        }
+
+        return nullptr;
     }
 
     static void freeVSTEvent (Vst2::VstEvent* e)
